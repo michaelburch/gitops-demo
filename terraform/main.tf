@@ -201,7 +201,7 @@ module "acr_private_dns_zone" {
 # If using AGIC and specifying a subnet cidr, the cluster identity will
 # need contributor access to the cluster vnet to add the subnet
 resource "azurerm_role_assignment" "agic_vnet_contributor" {
-  count                = var.aks_app_gateway_enabled && var.aks_app_gateway_subnet != null ? 1 : 0
+  count                = module.aks_cluster.ingress_identity_id != null ? 1 : 0
   scope                = module.mgmt_network.vnet_id         
   role_definition_name = "Contributor"
   principal_id         = module.aks_cluster.ingress_identity_id
