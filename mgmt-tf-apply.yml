@@ -1,0 +1,75 @@
+# Terraform apply pipeline
+
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+    - "terraform/*"
+    - "mgmt-tf-apply.yml"
+    exclude:
+    - "*"
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- task: AzureCLI@2
+  name: "Create_Resource_Group"
+  displayName: "Create TF State ResourceGroup"
+  inputs:
+    azureSubscription: 'vse'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      # Create resource group
+      echo "Checking if [$(RESOURCEGROUPNAME)] resource group actually exists in the subscription..."
+      az group show --name $(RESOURCEGROUPNAME) &>/dev/null
+      
+      if [[ $? != 0 ]]; then
+          echo "Creating [$(RESOURCEGROUPNAME)] resource group in the subscription..."
+      
+          # Create the resource group
+          az group create \
+              --name $(RESOURCEGROUPNAME) \
+              --location $(LOCATION) 1>/dev/null
+      
+          if [[ $? == 0 ]]; then
+              echo "[$(RESOURCEGROUPNAME)] resource group successfully created in the subscription"
+          else
+              echo "Failed to create [$(RESOURCEGROUPNAME)] resource group in the subscription"
+              exit
+          fi
+      else
+          echo "[$(RESOURCEGROUPNAME)] resource group already exists in the subscription"
+      fi
+- task: TerraformCLI@0
+  displayName: "TF Init"
+  inputs:
+    command: 'init'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+    backendType: 'azurerm'
+    backendServiceArm: 'vse'
+    ensureBackend: true
+    backendAzureRmResourceGroupName: $(RESOURCEGROUPNAME)
+    backendAzureRmResourceGroupLocation: $(LOCATION)
+    backendAzureRmStorageAccountName: 'tfstatestorage50744'
+    backendAzureRmStorageAccountSku: 'Standard_ZRS'
+    backendAzureRmContainerName: 'tfstate'
+    backendAzureRmKey: 'common'
+    allowTelemetryCollection: false
+- task: DownloadSecureFile@1
+  name: adminSshKey
+  displayName: 'Download SSH Key'
+  inputs:
+    secureFile: 'id_rsa.pub'
+- task: TerraformCLI@0
+  displayName: "TF Apply (Mgmt Network and Cluster)"
+  inputs:
+    command: 'apply'
+    commandOptions: '-var=ssh_public_key=$(adminSshKey.secureFilePath)'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+    environmentServiceName: 'vse'
+    runAzLogin: true
+    allowTelemetryCollection: true

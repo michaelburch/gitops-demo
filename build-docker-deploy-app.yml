@@ -1,0 +1,133 @@
+# Docker
+# Build and push an image to Azure Container Registry
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger: none
+
+pool: agents-app
+
+resources:
+  pipelines:
+  - pipeline: app-pipeline
+    source: vote-app-build   # Trigger when this other pipeline is run
+    trigger: true
+  repositories:
+  - repository: azurevoterepo
+    type: github
+    endpoint: michaelburch
+    name: michaelburch/azure-voting-app-redis
+
+variables:
+  # Container registry service connection established during pipeline creation
+  resourceGroupName: gitops-demo-app
+  clusterName: appAks
+  imageRepository: 'azure-vote-front'
+  containerRegistry: 'appacr50744'
+  sourceContext: 'git://github.com/michaelburch/azure-voting-app-redis/'
+
+steps: 
+- checkout: self
+- task: HelmInstaller@0
+  displayName: "Install Helm and kubectl"
+  inputs:
+    helmVersion: '3.6.3'
+    checkLatestHelmVersion: false
+    installKubectl: true
+
+- task: AzureCLI@2
+  displayName: "Get AKS and ACR credentials"
+  inputs:
+    azureSubscription: 'vse'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      az aks get-credentials -g $RESOURCEGROUPNAME -n $CLUSTERNAME -a --overwrite; 
+      
+      TOKEN=$(az acr login -n $CONTAINERREGISTRY --expose-token --output tsv --query accessToken)
+      
+      cat << EOF > config.json
+      {
+          "auths": {
+              "$CONTAINERREGISTRY.azurecr.io": {
+                  "auth": "MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOg==", 
+                  "identityToken": "$TOKEN"
+              }
+          }
+      }
+      EOF
+      #kubectl get configmap
+      #kubectl -n kaniko delete configmap acrdocker && kubectl -n kaniko create configmap acrdocker --from-file=config.json
+    addSpnToEnvironment: true
+
+- task: Kubernetes@1
+  inputs:
+    connectionType: 'None'
+    command: get 
+    arguments: configmap
+    secretType: 'dockerRegistry'
+    containerRegistryType: 'Azure Container Registry'
+    configMapName: 'acrdocker'
+    forceUpdateConfigMap: true
+    useConfigMapFile: true
+    configMapFile: 'config.json'
+    namespace: kaniko
+    
+- task: Bash@3
+  displayName: "Build and Push Image"
+  inputs:
+    targetType: 'inline'
+    script: |
+      cat > deploy.yaml <<EOF
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: kaniko-$(Build.BuildId)
+        namespace: kaniko
+      spec:
+        containers:
+        - name: kaniko
+          image: gcr.io/kaniko-project/executor:latest
+          args:
+          - "--context=$(sourceContext)"
+          - "--context-sub-path=azure-vote"
+          - "--dockerfile=Dockerfile"
+          - "--destination=$CONTAINERREGISTRY.azurecr.io/$IMAGEREPOSITORY:$(Build.BuildId)"
+          - "--destination=$CONTAINERREGISTRY.azurecr.io/$IMAGEREPOSITORY:latest"
+          volumeMounts:
+          - name: docker-config
+            mountPath: /kaniko/.docker/
+        restartPolicy: Never
+        volumes:
+        - name: docker-config
+          configMap:
+            name: acrdocker
+      EOF
+      kubectl apply -f deploy.yaml
+
+- checkout: azurevoterepo
+- task: AzureCLI@2
+  displayName: "Build and Push Chart"
+  inputs:
+    azureSubscription: 'vse'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      export HELM_EXPERIMENTAL_OCI=1
+      TOKEN=$(az acr login -n $CONTAINERREGISTRY --expose-token --output tsv --query accessToken)
+      cd azure-voting-app-redis/azure-vote/azure-vote-front
+      echo $TOKEN | helm registry login $CONTAINERREGISTRY.azurecr.io -u 00000000-0000-0000-0000-000000000000 --password-stdin
+      helm chart save . appacr50744.azurecr.io/helm/azure-vote-front:0.1.0
+      helm chart push appacr50744.azurecr.io/helm/azure-vote-front:0.1.0
+
+- task: AzureCLI@2
+  displayName: "Install Chart"
+  inputs:
+    azureSubscription: 'vse'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      export HELM_EXPERIMENTAL_OCI=1
+      TOKEN=$(az acr login -n $CONTAINERREGISTRY --expose-token --output tsv --query accessToken)
+      echo $TOKEN | helm registry login $CONTAINERREGISTRY.azurecr.io -u 00000000-0000-0000-0000-000000000000 --password-stdin
+      helm chart export appacr50744.azurecr.io/helm/azure-vote-front:0.1.0
+      helm -n default upgrade --install vote ./azure-vote-front --set image.repository="appacr50744.azurecr.io/azure-vote-front" --set image.tag="$(Build.BuildId)" --set image.pullPolicy="Always"

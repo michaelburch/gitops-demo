@@ -1,0 +1,36 @@
+# Terraform Destroy Pipeline for tearing down demo environment
+
+
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- task: TerraformCLI@0
+  inputs:
+    command: 'init'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+    backendType: 'azurerm'
+    backendServiceArm: 'vse'
+    ensureBackend: true
+    backendAzureRmResourceGroupName: $(RESOURCEGROUPNAME)
+    backendAzureRmResourceGroupLocation: $(LOCATION)
+    backendAzureRmStorageAccountName: 'tfstatestorage50744'
+    backendAzureRmStorageAccountSku: 'Standard_ZRS'
+    backendAzureRmContainerName: 'tfstate'
+    backendAzureRmKey: 'common'
+    allowTelemetryCollection: false
+- task: DownloadSecureFile@1
+  name: adminSshKey
+  displayName: 'Download SSH Key'
+  inputs:
+    secureFile: 'id_rsa.pub'
+- task: TerraformCLI@0
+  inputs:
+    command: 'destroy'
+    commandOptions: '-var=ssh_public_key=$(adminSshKey.secureFilePath)'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+    environmentServiceName: 'vse'
+    runAzLogin: true
+    allowTelemetryCollection: true

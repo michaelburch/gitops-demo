@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ado-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ado-agent
+  template:
+    metadata:
+      labels:
+        app: ado-agent
+        version: "0.1"
+    spec:
+      containers:
+      - name: ado-agent
+        image: demoacr50744.azurecr.io/adoagent:latest
+        env:
+          - name: AZP_URL
+            valueFrom:
+              secretKeyRef:
+                name: agentpool
+                key: AZP_URL
+          - name: AZP_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: agentpool
+                key: AZP_TOKEN
+          - name: AZP_POOL
+            value: agents-mgmt
