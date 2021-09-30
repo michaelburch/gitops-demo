@@ -1,6 +1,6 @@
-param tags object = {}
 param location string = resourceGroup().location
 param name string
+param tags object = {}
 param subnetName string
 param vnetId string
 param enableAcceleratedNetworking bool = false

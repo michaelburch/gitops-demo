@@ -1,5 +1,5 @@
-param name string = 'routeTable'
 param location string = resourceGroup().location
+param name string = 'routeTable'
 param tags object = {}
 param routes array = []
 
