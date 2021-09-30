@@ -88,6 +88,16 @@ module vm 'modules/virtual_machine.bicep' = {
     name: 'demoVm'
     subnetName: 'serverSubnet'
     vnetId: mgmtVnet.outputs.id
+/*  enableAcceleratedNetworking: false
+    enableIPForwarding:false
+    imageOffer: 'UbuntuServer'
+    imagePublisher: 'Canonical'
+    imageSku: '18.04-LTS'
+    imageVersion: 'latest'
+    location: resourceGroup().location
+    vmSize: 'Standard_B2ms'
+    storageType: 'Standard_LRS'
+    vmUser: azadmin  */
     tags: tags
   }
 }
@@ -99,5 +109,20 @@ module acr 'modules/container_registry.bicep' = {
     adminUserEnabled: true
     name: 'demoAcr'
     tags: tags
+  }
+}
+
+module acrPrivateDns 'modules/private_dns_zone.bicep' = {
+  name: 'acrPrivatelink'
+  scope: rg
+  params: {
+    name: 'privatelink.azurecr.io'
+    linkedVnets: [
+      {
+        name: mgmtVnet.name
+        registrationEnabled: false
+        id: mgmtVnet.outputs.id
+      }
+    ]
   }
 }
