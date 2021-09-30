@@ -1,3 +1,6 @@
+// Example CLI usage
+// az deployment sub create --location southcentralus --param subscriptionId='00000000-0000-0000-0000-000000000000' -f main.bicep 
+param subscriptionId string
 targetScope = 'subscription'
 var tags = {
   createdWith: 'bicep'
@@ -50,7 +53,7 @@ module spokeToHubPeering 'modules/virtual_network_peering.bicep' = {
   params: {
     vnet1Name: 'hubnet-vnet'
     vnet1ResourceGroup: 'hubnet'
-    vnet1Subscription: 'b464152a-a78e-48f5-85af-268bd1a50744'
+    vnet1Subscription: subscriptionId
     vnet2Name: mgmtVnet.name
     vnet2ResourceGroup: rg.name
   }
