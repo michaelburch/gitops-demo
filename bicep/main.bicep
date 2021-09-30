@@ -37,10 +37,13 @@ module mgmtVnet 'modules/virtual_network.bicep' = {
     subnets: [
       {
         name: 'serverSubnet'
-        addressPrefixes: [
-          '192.168.25.0/26'
-        ]
-        privateLinkServiceNetworkPolicies: 'Disabled'
+        properties: {
+          addressPrefix: '192.168.25.0/26'
+          privateLinkServiceNetworkPolicies: 'Disabled'
+          routeTable: {
+            id: routeTable.outputs.id
+          }
+        }
       }
     ]
   }
@@ -56,5 +59,34 @@ module spokeToHubPeering 'modules/virtual_network_peering.bicep' = {
     vnet1Subscription: subscriptionId
     vnet2Name: mgmtVnet.name
     vnet2ResourceGroup: rg.name
+  }
+}
+
+module routeTable 'modules/route_table.bicep' = {
+  name: 'routeTable'
+  scope: rg
+  params: {
+    name: 'hub-nva-routes'
+    tags: tags
+    routes: [
+      {
+        name: 'vpn-remote-office'
+        properties: {
+          addressPrefix: '192.168.16.0/21'
+          nextHopType: 'VirtualAppliance'
+          nextHopIpAddress: '192.168.24.132'
+        }
+      }
+    ]
+  }
+}
+
+module vm 'modules/virtual_machine.bicep' = {
+  name: 'demoVm'
+  scope: rg
+  params: {
+    name: 'demoVm'
+    subnetName: 'serverSubnet'
+    vnetId: mgmtVnet.outputs.id
   }
 }
