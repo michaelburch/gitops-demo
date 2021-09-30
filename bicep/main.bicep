@@ -88,5 +88,16 @@ module vm 'modules/virtual_machine.bicep' = {
     name: 'demoVm'
     subnetName: 'serverSubnet'
     vnetId: mgmtVnet.outputs.id
+    tags: tags
+  }
+}
+
+module acr 'modules/container_registry.bicep' = {
+  name: 'demoAcr'
+  scope: rg
+  params: {
+    adminUserEnabled: true
+    name: 'demoAcr'
+    tags: tags
   }
 }

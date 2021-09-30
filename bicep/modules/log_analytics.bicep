@@ -1,3 +1,4 @@
+param location string = resourceGroup().location
 param name string
 param tags object = {}
 param sku string = 'PerGB2018'
@@ -6,7 +7,7 @@ param enableContainerInsights bool = false
 
 resource law 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
   name: name
-  location: resourceGroup().location
+  location: location
   tags: tags
   properties: {
     sku: {
@@ -18,7 +19,7 @@ resource law 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
 
 resource solutionContainerInsights 'Microsoft.OperationsManagement/solutions@2015-11-01-preview' = if (enableContainerInsights) {
   name: 'ContainerInsights(${law.name})'
-  location: resourceGroup().location
+  location: location
   tags: tags
   properties: {
     workspaceResourceId: law.id
