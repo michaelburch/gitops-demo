@@ -5,8 +5,10 @@ param sku string = 'Premium'
 param publicNetworkAccess string = 'Disabled'
 param adminUserEnabled bool = false
 
+var uniqueSuffix = substring(subscription().subscriptionId,(length(subscription().subscriptionId) -5),5)
+var uniqueName = '${name}${uniqueSuffix}'
 resource acr 'Microsoft.ContainerRegistry/registries@2021-06-01-preview' = {
-  name: '${name}${uniqueString(resourceGroup().id)}'
+  name: uniqueName
   location: location
   tags: tags
   identity: {
@@ -25,7 +27,7 @@ resource acr 'Microsoft.ContainerRegistry/registries@2021-06-01-preview' = {
 }
 
 resource acrIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
-  name: '${name}Identity'
+  name: uniqueName
   location: location
   tags: tags
   
